@@ -1,0 +1,8 @@
+# Local working notes and Sofabaton hub backups (household data)
+HANDOFF.md
+hub_backup_*.json
+backups/
+
+__pycache__/
+*.pyc
+.venv/
