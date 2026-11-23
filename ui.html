@@ -1,0 +1,950 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Projector Relay</title>
+<style>
+:root {
+  --bg: #f6f5f2; --card: #ffffff; --ink: #1d1d1b; --muted: #6b6a66; --line: #e2e0da;
+  --accent: #2f5d8a; --accent-ink: #ffffff; --ok: #2e7d4f; --bad: #b3261e; --warn: #9a6700;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #151514; --card: #1f1f1d; --ink: #ecebe7; --muted: #a09f99; --line: #34332f;
+    --accent: #7fb0e0; --accent-ink: #10202f; --ok: #6cc391; --bad: #f08a80; --warn: #e0b24f;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 860px; margin: 0 auto; padding: 20px 16px 48px; }
+h1 { font-size: 20px; margin: 0; }
+h2 { font-size: 16px; margin: 0; }
+header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.muted { color: var(--muted); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.spread { justify-content: space-between; }
+[hidden] { display: none !important; }
+button, select, input { font: inherit; color: inherit; }
+button { border: 1px solid var(--line); background: var(--card); border-radius: 7px; padding: 6px 12px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button.danger { color: var(--bad); }
+button.icon { padding: 4px 8px; min-width: 32px; }
+button:disabled { opacity: .5; cursor: default; }
+select, input { border: 1px solid var(--line); background: var(--bg); border-radius: 7px; padding: 5px 8px; max-width: 100%; }
+input[type=number] { width: 90px; }
+.presetbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 6px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 auto; }
+.tab { border-radius: 99px; padding: 6px 16px; font-weight: 600; }
+.tab[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.tab .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); margin-left: 7px; vertical-align: middle; }
+.addbox { margin-left: auto; }
+button.copy { display: inline-flex; align-items: center; justify-content: center; padding: 5px 7px; color: var(--muted); }
+button.copy:hover { color: var(--ink); }
+button.copy.done { color: var(--ok); border-color: var(--ok); }
+button.copy svg { width: 16px; height: 16px; }
+.check { font-size: 13px; white-space: nowrap; }
+.check.ok { color: var(--ok); } .check.bad { color: var(--bad); } .check.muted { color: var(--muted); }
+.checks { font-size: 13px; margin: 4px 0 0; padding-left: 18px; color: var(--bad); }
+dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink);
+  width: min(720px, calc(100vw - 32px)); padding: 16px; }
+#confirm { width: min(440px, calc(100vw - 32px)); }
+button.danger-fill { background: var(--bad); border-color: var(--bad); color: var(--card); }
+#settings { width: min(760px, calc(100vw - 32px)); }
+.settings-scroll { max-height: min(60vh, 560px); overflow: auto; border-top: 1px solid var(--line); }
+#settingsRows tr.changed td:first-child { color: var(--accent); }
+#settingsRows tr.changed { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+#settingsRows tr.locked td:first-child { color: var(--muted); }
+#settingsPending tr.changed { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+#settingsPending tr.changed td:first-child { color: var(--accent); }
+#settingsTitle { display: flex; align-items: center; gap: 8px; }
+.namepill { display: inline-block; padding: 2px 12px; border-radius: 99px; background: var(--accent); color: var(--accent-ink);
+  font-size: 15px; font-weight: 600; }
+tr.section.group th { font-size: 15px; font-weight: 650; letter-spacing: 0; text-transform: none; color: var(--ink);
+  padding: 16px 4px 6px; border-bottom: 1px solid var(--line); }
+tr.section th { text-align: left; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--muted); padding: 10px 4px 4px; position: sticky; top: 0; background: var(--card); z-index: 1; }
+.steps td.setting { font-weight: 500; }
+#settingsRows td.now { color: var(--muted); font-size: 13px; white-space: nowrap; }
+button.grip { border: 0; background: none; padding: 6px 4px; cursor: grab; touch-action: none; color: var(--muted);
+  display: inline-flex; border-radius: 5px; }
+button.grip:hover, button.grip:focus-visible { color: var(--ink); background: var(--bg); }
+button.grip svg { width: 10px; height: 16px; fill: currentColor; }
+.steps td.handle { width: 1%; padding-right: 0; }
+.steps tr.dragging { opacity: .25; }
+.drag-ghost { position: fixed; z-index: 50; margin: 0; pointer-events: none; background: var(--card);
+  border: 1px solid var(--accent); border-radius: 8px; box-shadow: 0 10px 28px rgb(0 0 0 / .35);
+  transform: scale(1.015); }
+.drag-ghost td { border-top: 0 !important; }
+.drag-ghost button.grip { cursor: grabbing; color: var(--accent); }
+.steps tr.dragging button.grip { cursor: grabbing; }
+.drop-line { position: fixed; z-index: 60; height: 4px; border-radius: 2px; background: var(--accent); pointer-events: none;
+  box-shadow: 0 0 0 2px var(--card); }
+.drop-line::before, .drop-line::after { content: ""; position: absolute; top: -4px; width: 12px; height: 12px;
+  border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--card); }
+.drop-line::before { left: -6px; } .drop-line::after { right: -6px; }
+dialog::backdrop { background: rgb(0 0 0 / .45); }
+.links { width: 100%; border-collapse: collapse; margin: 10px 0; }
+.links td { padding: 6px 4px; border-top: 1px solid var(--line); vertical-align: middle; }
+.links td:first-child { font-weight: 600; white-space: nowrap; }
+.links td:last-child { width: 1%; }
+.status-line { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+#updated { font-size: 13px; font-weight: 500; margin-left: 8px; vertical-align: middle; padding: 3px 10px; }
+.pill { display: inline-block; padding: 1px 9px; border-radius: 99px; border: 1px solid var(--line); font-size: 13px; }
+.powerwrap { position: relative; }
+.pill.power { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; cursor: pointer; background: var(--card); }
+.pill.power .led { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.pill.power .caret { width: 9px; height: 6px; fill: none; stroke: currentColor; stroke-width: 1.6; opacity: .7; }
+.pill.power.on { color: var(--ok); border-color: var(--ok); }
+.pill.power.on .led { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 25%, transparent); }
+.pill.power.busy { color: var(--warn); border-color: var(--warn); }
+.pill.power.busy .led { background: var(--warn); animation: pulse 1.2s ease-in-out infinite; }
+.pill.power.broken { color: var(--bad); border-color: var(--bad); }
+.pill.power.broken .led { display: none; }
+.pill.power .broken-icon { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+@keyframes pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .pill.power.busy .led { animation: none; } }
+.powermenu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; min-width: 150px; padding: 4px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 9px; box-shadow: 0 10px 28px rgb(0 0 0 / .25); }
+.powermenu button { display: block; width: 100%; text-align: left; border: 0; background: none; border-radius: 6px; padding: 7px 10px; }
+.powermenu button:hover:not(:disabled), .powermenu button:focus-visible { background: var(--bg); }
+.powermenu button.current { color: var(--muted); }
+.powermenu button.current::after { content: " ✓"; }
+#statusMsg { margin: 0; min-height: 0; }
+.offline { margin: 0 0 14px; padding: 8px 12px; border-radius: 8px; font-size: 14px;
+  border: 1px solid var(--bad); color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, transparent); }
+.steps { width: 100%; border-collapse: collapse; margin: 10px 0; }
+.steps td { padding: 4px 4px; border-top: 1px solid var(--line); vertical-align: middle; }
+.steps td.ctl { white-space: nowrap; text-align: right; }
+.urlbox { display: flex; gap: 6px; align-items: center; min-width: 0; flex: 1 1 320px; justify-content: flex-end; }
+.url { font: 12px ui-monospace, Menlo, monospace; color: var(--muted); background: transparent; border: 1px solid var(--line);
+  width: 100%; max-width: 420px; padding: 4px 6px; }
+.msg { font-size: 13px; margin-top: 6px; min-height: 1em; }
+.msg.ok { color: var(--ok); } .msg.bad { color: var(--bad); } .msg.warn { color: var(--warn); }
+.dirty { color: var(--warn); font-size: 13px; }
+.warnicon { color: var(--warn); border-color: var(--warn); font-weight: 700; padding: 2px 8px; margin-right: 4px; }
+@media (max-width: 560px) {
+  .steps, .steps tbody, .steps tr, .steps td { display: block; width: 100%; }
+  .steps tr { border-top: 1px solid var(--line); padding: 6px 0; }
+  .steps td { border: 0; padding: 2px 0; text-align: left !important; }
+  .urlbox { justify-content: flex-start; }
+}
+</style>
+</head>
+<body>
+<main>
+  <div class="offline" id="offline" role="status" hidden>Relay offline, retrying…</div>
+  <header>
+    <div>
+      <h1>Projector Relay <button id="updated" class="primary" hidden>Updated — reload</button></h1>
+      <div class="status-line">
+        <span class="muted" id="model">Connecting…</span>
+        <span class="powerwrap">
+          <button class="pill power" id="power" type="button" aria-haspopup="menu" aria-expanded="false">
+            <span class="led" aria-hidden="true"></span><span id="powerText">Checking…</span>
+            <svg class="caret" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4"/></svg>
+          </button>
+          <div class="powermenu" id="powerMenu" role="menu" hidden>
+            <button type="button" role="menuitem" data-power="on">Power on</button>
+            <button type="button" role="menuitem" data-power="off">Power off</button>
+          </div>
+        </span>
+        <span class="muted" id="input"></span>
+        <span class="msg" id="statusMsg"></span>
+      </div>
+    </div>
+    <form class="row" id="auth" autocomplete="off">
+      <span class="muted" id="authState"></span>
+      <input id="token" type="password" autocomplete="new-password" placeholder="RELAY_TOKEN" size="18" hidden>
+      <button id="signIn" type="submit" hidden>Sign in</button>
+      <button id="signOut" type="button" hidden>Sign out</button>
+    </form>
+  </header>
+
+  <nav class="presetbar" aria-label="Presets">
+    <div class="tabs" id="tabs"></div>
+    <div class="row addbox">
+      <button id="openLinks" type="button">Links</button>
+      <button id="addPreset" type="button">+ Add preset</button>
+      <span class="row" id="newBox" hidden>
+        <input id="newName" placeholder="new_preset_name" size="16" aria-label="New preset name">
+        <button id="create" class="primary" type="button">Create</button>
+        <button id="cancelNew" type="button">Cancel</button>
+      </span>
+    </div>
+  </nav>
+  <div class="msg" id="presetsMsg"></div>
+  <div id="presets"></div>
+
+  <dialog id="confirm" aria-labelledby="confirmTitle">
+    <h2 id="confirmTitle"></h2>
+    <p id="confirmText"></p>
+    <div class="row" style="justify-content: flex-end">
+      <button id="confirmNo" type="button">Cancel</button>
+      <button id="confirmYes" type="button" class="primary danger-fill"></button>
+    </div>
+  </dialog>
+
+  <dialog id="settings" aria-labelledby="settingsTitle">
+    <div class="row spread">
+      <h2 id="settingsTitle">Settings</h2>
+      <input id="settingsFilter" type="search" placeholder="Filter" aria-label="Filter settings" size="18">
+    </div>
+    <p class="muted" id="settingsNote"></p>
+    <div class="settings-scroll"><table class="links"><tbody id="settingsPending"></tbody><tbody id="settingsRows"></tbody></table></div>
+    <div class="row spread" style="margin-top: 12px">
+      <span class="muted" id="settingsCount">No changes</span>
+      <div class="row">
+        <button id="settingsCancel" type="button">Cancel</button>
+        <button id="settingsApply" type="button" class="primary" disabled>Add to preset</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="links" aria-labelledby="linksTitle">
+    <div class="row spread">
+      <h2 id="linksTitle">Remote links</h2>
+      <button id="closeLinks" type="button">Close</button>
+    </div>
+    <p class="muted">For Sofabaton Wifi commands: method GET, plus an <code>X-Token</code> header holding the relay token. Only saved presets are listed.</p>
+    <table class="links"><tbody id="linkRows"></tbody></table>
+  </dialog>
+
+
+</main>
+
+<script>
+"use strict";
+const LABELS = {
+  input: "Input", blank: "Picture blank", picture_mode: "Picture mode", contrast: "Contrast",
+  brightness: "Brightness", color: "Color", hue: "Hue", sharpness: "Sharpness",
+  color_temp: "Color temperature", color_space: "Color space", gamma_correction: "Gamma",
+  film_mode: "Film mode", real_cre: "Reality Creation", real_cre_db: "Reality Creation database",
+  real_cre_reso: "Reality Creation resolution", real_cre_noise: "Reality Creation noise filter",
+  motionflow: "Motionflow", nr: "Noise reduction", mnr: "MPEG noise reduction",
+  smooth_grd: "Smooth gradation", contrast_enh: "Contrast enhancer", col_correction: "Color correction",
+  clear_white: "Clear white", xvcolor: "x.v.Color", input_lag_red: "Input lag reduction",
+  lamp_control: "Lamp control", hdr: "HDR", aspect: "Aspect", pic_pos_sel: "Picture position",
+  "2d3d_sel": "2D/3D select", "3d_format": "3D format", "3d_depth": "3D depth",
+  sim3d_effect: "Simulated 3D effect", hdmi_signal_format: "HDMI signal format",
+  dynamic_range: "Dynamic range", col_corr_hue: "Color correction hue",
+  col_corr_color: "Color correction saturation", col_corr_brt: "Color correction brightness",
+  col_space_x: "Custom color space x", col_space_y: "Custom color space y",
+  coltemp_gain_r: "Color temp gain R", coltemp_gain_g: "Color temp gain G", coltemp_gain_b: "Color temp gain B",
+  coltemp_bias_r: "Color temp bias R", coltemp_bias_g: "Color temp bias G", coltemp_bias_b: "Color temp bias B",
+};
+// Add settings… groups, most likely to be changed first; settings inside a group likewise.
+const GROUPS = [
+  ["Mode & input", ["picture_mode", "input", "aspect", "hdr", "input_lag_red", "pic_pos_sel", "blank"]],
+  ["Picture", ["brightness", "contrast", "lamp_control", "gamma_correction", "color_temp", "color", "sharpness",
+    "hue", "color_space", "clear_white", "xvcolor"]],
+  ["Motion & processing", ["motionflow", "real_cre", "real_cre_reso", "real_cre_noise", "real_cre_db", "film_mode",
+    "nr", "mnr", "smooth_grd", "contrast_enh"]],
+  ["Signal", ["hdmi_signal_format", "dynamic_range"]],
+  ["3D", ["2d3d_sel", "3d_format", "3d_depth", "sim3d_effect"]],
+  ["Calibration", ["coltemp_gain_r", "coltemp_gain_g", "coltemp_gain_b", "coltemp_bias_r", "coltemp_bias_g",
+    "coltemp_bias_b", "col_correction", "col_corr_hue", "col_corr_color", "col_corr_brt", "col_space_x", "col_space_y"]],
+];
+const SUFFIXES = { r: "Red", g: "Green", b: "Blue", c: "Cyan", y: "Yellow", m: "Magenta", hdmi1: "HDMI 1", hdmi2: "HDMI 2" };
+// Settings Input lag reduction greys out once it is on.
+const LAG_BLOCKED = new Set(["motionflow", "real_cre", "real_cre_db", "real_cre_reso", "real_cre_noise"]);
+// Not stored per picture mode, so their position relative to Picture mode does not matter.
+const NOT_PER_MODE = new Set(["input", "blank", "picture_mode", "input_lag_red", "hdmi_signal_format", "dynamic_range"]);
+const label = n => LABELS[n] || n.replace(/_/g, " ");
+const $ = id => document.getElementById(id);
+const el = (tag, props = {}, ...kids) => {
+  const e = Object.assign(document.createElement(tag), props);
+  for (const k of kids) e.append(k);
+  return e;
+};
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+  del(k) { try { localStorage.removeItem(k); } catch {} },
+};
+store.del("relayToken");  // an earlier version kept the token here; the cookie replaces it
+
+let caps = {};            // command -> capability from /caps
+let presetCommands = [];  // commands a preset may set
+let editable = false;
+let drafts = {};          // name -> steps being edited
+let saved = {};           // name -> steps as stored on the relay
+let current = store.get("relayPreset") || "";
+
+class AuthError extends Error {}
+
+async function api(path, opts = {}) {
+  const headers = Object.assign({ "X-Relay-UI": "1" }, opts.headers);
+  const res = await fetch(path, Object.assign({}, opts, { headers, credentials: "same-origin" }));
+  const text = await res.text();
+  let body;
+  try { body = JSON.parse(text); } catch { body = { ok: res.ok, error: text }; }
+  if (res.status === 401) { showAuth(false); throw new AuthError("Sign in with the relay token above."); }
+  if (!res.ok && !body.steps) throw new Error(body.detail || body.error || text || res.statusText);
+  return body;
+}
+
+function say(id, text, kind = "") { say2($(id), text, kind); }
+function say2(node, text, kind = "") { node.textContent = text; node.className = "msg " + kind; }
+
+// -- sign-in: the token goes in once; afterwards only an HttpOnly cookie exists ------
+
+function showAuth(signedIn, required = true, auto = false) {
+  $("authState").textContent = !required ? "No token required" : auto ? "Signed in automatically" : signedIn ? "Signed in" : "";
+  $("token").hidden = $("signIn").hidden = signedIn || !required;
+  $("signOut").hidden = !signedIn || !required || auto;  // signing out would just sign back in
+  document.querySelector(".presetbar").hidden = required && !signedIn;
+  $("token").value = "";
+}
+
+$("auth").onsubmit = async ev => {
+  ev.preventDefault();
+  const token = $("token").value.trim();
+  $("token").value = "";
+  if (!token) return;
+  const res = await fetch("/ui/login", {
+    method: "POST", credentials: "same-origin",
+    headers: { "Content-Type": "application/json", "X-Relay-UI": "1" },
+    body: JSON.stringify({ token }),
+  });
+  if (!res.ok) { $("authState").textContent = "Wrong token"; return; }
+  showAuth(true);
+  load();
+};
+$("signOut").onclick = async () => {
+  await fetch("/ui/logout", { method: "POST", credentials: "same-origin", headers: { "X-Relay-UI": "1" } });
+  showAuth(false);
+};
+
+// -- status -------------------------------------------------------------------------
+
+const POWER_LABELS = { on: "On", standby: "Standby", startup: "Warming up", cooling1: "Cooling down", cooling2: "Cooling down" };
+const BROKEN_ICON = '<svg class="broken-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7H7a5 5 0 0 0 0 10h2"/>' +
+  '<path d="M15 7h2a5 5 0 0 1 2.9 9.1"/><path d="M8 12h2"/><path d="M3 3l18 18"/></svg>';
+let powerState = null;
+let fastUntil = 0;  // poll every second until then, after a power command
+let statusBusy = false;
+
+function showPower(state, problem = "") {
+  const p = $("power");
+  powerState = state;
+  const broken = state === "broken";
+  const unknown = state === "unknown";
+  p.className = "pill power" + (state === "on" ? " on" : broken ? " broken" : /startup|cooling/.test(state || "") ? " busy" : "");
+  p.querySelector(".broken-icon")?.remove();
+  if (broken) p.insertAdjacentHTML("afterbegin", BROKEN_ICON);
+  $("powerText").textContent = broken ? "Unreachable" : unknown ? "Unknown" : POWER_LABELS[state] || state || "Checking…";
+  p.title = broken ? "The relay can't read the projector's power state: " + problem
+    : unknown ? "Unknown: the relay is offline."
+    : "Projector power: " + $("powerText").textContent + ". Click to change.";
+  for (const b of $("powerMenu").querySelectorAll("button")) {
+    const current = (b.dataset.power === "on" && state === "on") || (b.dataset.power === "off" && state === "standby");
+    b.classList.toggle("current", current);
+    b.disabled = current;
+  }
+}
+
+async function refreshStatus() {
+  if (statusBusy) return;
+  statusBusy = true;
+  try {
+    const s = await api("/status");
+    $("offline").hidden = true;
+    showPower(s.power);
+    $("input").textContent = s.input ? "Input " + s.input : "";
+  } catch (e) {
+    if (e instanceof AuthError) return;
+    const relayDown = e instanceof TypeError;  // fetch itself failed: no answer from the relay
+    $("offline").hidden = !relayDown;
+    showPower(relayDown ? "unknown" : "broken", e.message);
+    $("input").textContent = "";
+  } finally { statusBusy = false; }
+}
+
+function powerMenu(open) {
+  $("powerMenu").hidden = !open;
+  $("power").setAttribute("aria-expanded", String(open));
+  if (open) $("powerMenu").querySelector("button:not(:disabled)")?.focus();
+}
+$("power").onclick = ev => { ev.stopPropagation(); powerMenu($("powerMenu").hidden); };
+document.addEventListener("click", ev => { if (!$("powerMenu").contains(ev.target)) powerMenu(false); });
+document.addEventListener("keydown", ev => { if (ev.key === "Escape" && !$("powerMenu").hidden) { powerMenu(false); $("power").focus(); } });
+for (const b of $("powerMenu").querySelectorAll("button")) {
+  b.onclick = async () => {
+    powerMenu(false);
+    const state = b.dataset.power;
+    showPower(state === "on" ? "startup" : "cooling1");
+    say("statusMsg", "");
+    try {
+      const r = await api("/power/" + state, { method: "POST" });
+      if (r.action && r.action.includes("wake-on-lan")) say("statusMsg", "Wake-on-LAN sent; projector booting.", "ok");
+    } catch (e) { say("statusMsg", e.message, "bad"); }
+    fastUntil = Date.now() + 20000;
+    refreshStatus();
+  };
+}
+
+// -- preset picker --------------------------------------------------------------------
+
+const isDirty = name => JSON.stringify(drafts[name]) !== JSON.stringify(saved[name]);
+
+function refreshPicker() {
+  const names = Object.keys(drafts);
+  if (!names.includes(current)) current = names[0] || "";
+  $("tabs").replaceChildren(...names.map(n => {
+    const b = el("button", { className: "tab", type: "button", textContent: n });
+    b.setAttribute("aria-pressed", String(n === current));
+    if (isDirty(n)) {
+      b.append(el("span", { className: "dot" }));
+      b.title = "Unsaved changes";
+    }
+    b.onclick = () => { if (n !== current) select(n); };
+    return b;
+  }));
+}
+
+function select(name) {
+  current = name;
+  store.set("relayPreset", name);
+  refreshPicker();
+  renderCurrent();
+}
+
+let copyFrom = null;  // preset whose steps a new preset starts from
+const showAdd = (open, from = null) => {
+  copyFrom = open ? from : null;
+  $("newBox").hidden = !open;
+  $("addPreset").hidden = open;
+  $("newName").value = from ? from.slice(0, 27) + "_copy" : "";
+  $("create").textContent = from ? "Create copy" : "Create";
+  if (open) { $("newName").focus(); $("newName").select(); }
+  say("presetsMsg", from ? "New preset with the settings of " + from + " (including unsaved edits)." : "");
+};
+$("addPreset").onclick = () => showAdd(true);
+$("cancelNew").onclick = () => showAdd(false);
+$("newName").onkeydown = ev => {
+  if (ev.key === "Enter") $("create").click();
+  if (ev.key === "Escape") showAdd(false);
+};
+$("create").onclick = () => {
+  const name = $("newName").value.trim().toLowerCase();
+  if (!/^[a-z0-9_]{1,32}$/.test(name)) { say("presetsMsg", "Use lowercase letters, digits and _ (max 32).", "bad"); return; }
+  if (drafts[name]) { say("presetsMsg", "A preset called " + name + " already exists.", "bad"); return; }
+  drafts[name] = copyFrom && drafts[copyFrom] ? structuredClone(drafts[copyFrom]) : [];
+  showAdd(false);
+  select(name);
+};
+
+// -- confirmation -----------------------------------------------------------------------
+
+function confirmDialog(title, text, yesLabel) {
+  const d = $("confirm");
+  $("confirmTitle").textContent = title;
+  $("confirmText").textContent = text;
+  $("confirmYes").textContent = yesLabel;
+  return new Promise(resolve => {
+    const done = answer => { d.onclose = null; d.close(); resolve(answer); };
+    $("confirmYes").onclick = () => done(true);
+    $("confirmNo").onclick = () => done(false);
+    d.onclose = () => resolve(false);  // Esc
+    d.showModal();
+    $("confirmNo").focus();  // the safe choice is the default
+  });
+}
+
+// -- settings picker -------------------------------------------------------------------
+
+const stepKey = (cmd, sfx) => (sfx ? cmd + ":" + sfx : cmd);
+
+// Where a new step goes so the ordering rules hold: Input first, Picture mode right
+// after it, Input lag reduction last, everything else ahead of Input lag reduction on.
+function insertStep(steps, step) {
+  const at = cmd => steps.map(s => s[0]).lastIndexOf(cmd);
+  const [cmd] = step;
+  if (cmd === "input") return steps.unshift(step);
+  if (cmd === "picture_mode") return steps.splice(at("input") + 1, 0, step);
+  if (cmd === "input_lag_red") return steps.push(step);
+  const lagOn = steps.findIndex(s => s[0] === "input_lag_red" && s[1] === "on");
+  if (lagOn >= 0) return steps.splice(lagOn, 0, step);
+  steps.push(step);
+}
+
+async function openSettings(name, onDone) {
+  const steps = drafts[name];
+  const d = $("settings");
+  const changes = new Map();  // key -> [cmd, value, sfx]
+  const keys = [];  // [cmd, sfx, group]
+  const grouped = new Set(GROUPS.flatMap(([, cmds]) => cmds));
+  const others = presetCommands.filter(c => !grouped.has(c)).sort((a, b) => label(a).localeCompare(label(b)));
+  for (const [group, cmds] of [...GROUPS, ["Other", others]]) {
+    for (const cmd of cmds) {
+      if (!presetCommands.includes(cmd)) continue;  // this model does not support it
+      const sfxs = capFor(cmd).suffixes || [];
+      for (const sfx of sfxs.length ? sfxs : [null]) keys.push([cmd, sfx, group]);
+    }
+  }
+  const inPreset = new Map(steps.map(s => [stepKey(s[0], s[2]), s[1]]));
+  $("settingsTitle").replaceChildren("Settings for ", el("span", { className: "namepill", textContent: name }));
+  $("settingsFilter").value = "";
+  $("settingsNote").textContent = "Reading current values from the projector…";
+  $("settingsRows").replaceChildren();
+  $("settingsPending").replaceChildren();
+  const updateCount = () => {
+    $("settingsCount").textContent = changes.size ? changes.size + " change" + (changes.size > 1 ? "s" : "") : "No changes";
+    $("settingsApply").disabled = !changes.size;
+  };
+  updateCount();
+  d.showModal();
+
+  let live = {}, unread = 0;
+  try {
+    const r = await api("/values?names=" + encodeURIComponent(keys.map(([c, s]) => stepKey(c, s)).join(",")));
+    live = r.values;
+    unread = Object.values(live).filter(v => v === null).length;
+  } catch (e) { $("settingsNote").textContent = "Could not read current values: " + e.message; }
+  if (!d.open) return;
+  const parts = ["Change only what this preset should set; unchanged rows are left out."];
+  if (unread) parts.push(unread + " settings are greyed out on the projector right now (standby or no signal), so they start blank.");
+  $("settingsNote").textContent = parts.join(" ");
+
+  const rows = keys.map(([cmd, sfx, group]) => {
+    const key = stepKey(cmd, sfx);
+    const now = live[key];
+    const base = inPreset.has(key) ? inPreset.get(key) : now == null ? "" : String(now);
+    const tr = el("tr");
+    tr.dataset.group = group;
+    if (inPreset.has(key)) tr.classList.add("locked");
+    const ctl = valueControl([cmd, base, sfx], v => {
+      if (v === base || v === "") changes.delete(key); else changes.set(key, [cmd, v, sfx]);
+      tr.classList.toggle("changed", changes.has(key));
+      updateCount();
+    });
+    // Selects move on pick; number fields on Enter/blur, so they do not jump mid-typing.
+    ctl.addEventListener("change", () => place(tr, key, ctl));
+    const title = label(cmd) + (sfx ? " · " + (SUFFIXES[sfx] || sfx) : "");
+    tr.dataset.search = (title + " " + cmd).toLowerCase();
+    tr.append(
+      el("td", { textContent: title }),
+      el("td", {}, ctl),
+      el("td", { className: "now", textContent: inPreset.has(key) ? "in preset; edit it there" : now == null ? "—" : "now: " + now }),
+    );
+    if (inPreset.has(key)) ctl.disabled = true;
+    return tr;
+  });
+  const pendingHead = el("tr", { className: "section" }, el("th", { colSpan: 3, textContent: "To add" }));
+  const items = [];  // group headings and rows, in list order
+  for (const tr of rows) {
+    if (items.length === 0 || items[items.length - 1].dataset.group !== tr.dataset.group) {
+      const head = el("tr", { className: "section group" }, el("th", { colSpan: 3, textContent: tr.dataset.group }));
+      head.dataset.group = tr.dataset.group;
+      head.dataset.heading = "1";
+      items.push(head);
+    }
+    items.push(tr);
+  }
+  const syncHeadings = () => {
+    for (const head of items.filter(i => i.dataset.heading)) {
+      head.hidden = !rows.some(r => r.dataset.group === head.dataset.group && r.parentNode === $("settingsRows") && !r.hidden);
+    }
+  };
+  function place(tr, key, ctl) {
+    const pending = $("settingsPending");
+    if (changes.has(key) && tr.parentNode !== pending) {
+      pending.append(tr);
+      tr.hidden = false;
+      $("settingsRows").closest(".settings-scroll").scrollTo({ top: 0, behavior: "smooth" });
+    } else if (!changes.has(key) && tr.parentNode === pending) {
+      const after = items.slice(items.indexOf(tr) + 1).find(r => r.parentNode === $("settingsRows"));
+      $("settingsRows").insertBefore(tr, after || null);
+    } else return;
+    const any = pending.querySelectorAll("tr:not(.section)").length > 0;
+    if (any && pendingHead.parentNode !== pending) pending.prepend(pendingHead);
+    if (!any) pendingHead.remove();
+    syncHeadings();
+    ctl.focus({ preventScroll: true });
+  }
+  $("settingsRows").replaceChildren(...items);
+  $("settingsFilter").oninput = () => {
+    const q = $("settingsFilter").value.trim().toLowerCase();
+    for (const tr of rows) if (tr.parentNode === $("settingsRows")) tr.hidden = q && !tr.dataset.search.includes(q);
+    syncHeadings();
+  };
+  $("settingsFilter").focus();
+  $("settingsCancel").onclick = () => d.close();
+  $("settingsApply").onclick = () => {
+    for (const [key, [cmd, value, sfx]] of changes) {
+      const step = sfx ? [cmd, value, sfx] : [cmd, value];
+      insertStep(steps, step);
+    }
+    d.close();
+    onDone();
+  };
+}
+
+// -- links pane -----------------------------------------------------------------------
+
+function linkRow(title, path) {
+  const input = el("input", { className: "url", readOnly: true, value: location.origin + path });
+  input.onfocus = () => input.select();
+  const btn = copyButton(input);
+  return el("tr", {}, el("td", { textContent: title }), el("td", {}, input), el("td", {}, btn));
+}
+
+$("openLinks").onclick = () => {
+  $("linkRows").replaceChildren(
+    ...Object.keys(saved).map(n => linkRow(n, "/preset/" + n + "?wait=20")),
+    linkRow("Power on", "/power/on"),
+    linkRow("Power off", "/power/off"),
+  );
+  $("links").showModal();
+};
+$("closeLinks").onclick = () => $("links").close();
+$("links").onclick = ev => { if (ev.target === $("links")) $("links").close(); };
+
+// -- preset editor ----------------------------------------------------------------------
+
+function capFor(cmd, suffix) {
+  const c = caps[cmd];
+  if (!c) return {};
+  const s = suffix && c.by_suffix && c.by_suffix[suffix];
+  return {
+    kind: c.kind,
+    suffixes: c.suffixes || [],
+    options: (s && s.options) || c.options,
+    range: (s && s.range) || c.range,
+  };
+}
+
+
+
+// One warning (or null) per step, for orderings the projector is known to get wrong.
+function rowWarnings(steps) {
+  const warn = steps.map(() => []);
+  const lastIndex = cmd => steps.map(s => s[0]).lastIndexOf(cmd);
+  const input = lastIndex("input");
+  const mode = lastIndex("picture_mode");
+  steps.forEach(([cmd, value, suffix], i) => {
+    if (!NOT_PER_MODE.has(cmd)) {
+      if (i < input) warn[i].push("Above Input (step " + (input + 1) + "): picture settings are stored per input, so this lands on the previous input.");
+      if (i < mode) warn[i].push("Above Picture mode (step " + (mode + 1) + "): this changes the previous picture mode, not the new one.");
+    }
+    if (cmd === "picture_mode" && i < input)
+      warn[i].push("Above Input (step " + (input + 1) + "): the picture mode is remembered per input, so this sets it on the previous input.");
+    if (LAG_BLOCKED.has(cmd)) {
+      const lag = steps.findIndex((s, j) => j < i && s[0] === "input_lag_red" && s[1] === "on");
+      if (lag >= 0) warn[i].push("Below Input lag reduction on (step " + (lag + 1) + "): the projector refuses this once it is on. Move it above.");
+    }
+    const later = steps.findIndex((s, j) => j > i && s[0] === cmd && (s[2] || null) === (suffix || null));
+    if (later >= 0) warn[i].push("Overridden by step " + (later + 1) + ", which sets the same thing.");
+  });
+  return warn.map(w => (w.length ? w.join(" ") : null));
+}
+
+function valueControl(step, onChange) {
+  const [cmd, value, suffix] = step;
+  const c = capFor(cmd, suffix);
+  if (c.options) {
+    const sel = el("select");
+    const opts = c.options.includes(value) ? c.options : [value, ...c.options];
+    for (const o of opts) sel.append(el("option", { value: o, textContent: o === "" ? "—" : o, selected: o === value }));
+    sel.onchange = () => onChange(sel.value);
+    return sel;
+  }
+  const inp = el("input", { type: c.kind === "number" ? "number" : "text", value });
+  if (c.range) { inp.min = c.range.min; inp.max = c.range.max; inp.step = c.range.step || 1; }
+  inp.oninput = () => onChange(inp.value);
+  return inp;
+}
+
+const ICONS = {
+  copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+};
+function setIcon(button, name) {
+  button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS[name] + "</svg>";
+}
+function copyButton(input) {
+  const b = el("button", { className: "icon copy", type: "button", title: "Copy URL" });
+  b.setAttribute("aria-label", "Copy URL");
+  setIcon(b, "copy");
+  b.onclick = () => copyText(input, b);
+  return b;
+}
+
+async function copyText(input, button) {
+  let ok = false;
+  try {
+    if (window.isSecureContext && navigator.clipboard) { await navigator.clipboard.writeText(input.value); ok = true; }
+  } catch {}
+  if (!ok) {  // plain-http pages get no Clipboard API; the legacy path still works there
+    input.focus();
+    input.select();
+    try { ok = document.execCommand("copy"); } catch {}
+  }
+  if (ok) { setIcon(button, "check"); button.classList.add("done"); button.title = "Copied"; }
+  else button.title = "Selected: press ⌘C";
+  setTimeout(() => { setIcon(button, "copy"); button.classList.remove("done"); button.title = "Copy URL"; }, 1500);
+}
+
+function renderCurrent() {
+  const box = $("presets");
+  box.replaceChildren(current && drafts[current] ? renderPreset(current) : "");
+}
+
+function renderPreset(name) {
+  const steps = drafts[name];
+  const card = el("section", { className: "card" });
+  const msg = el("div", { className: "msg" });
+  const warnSlots = [];
+  const rerender = () => { const next = renderPreset(name); card.replaceWith(next); return next; };
+  const move = (from, to) => {  // to = index in the list before removal, 0..length
+    if (to === from || to === from + 1) return null;
+    const [step] = steps.splice(from, 1);
+    const at = to > from ? to - 1 : to;
+    steps.splice(at, 0, step);
+    return at;
+  };
+
+  const dirtyTag = el("span", { className: "dirty" });
+  const applyBtn = el("button", { textContent: "Apply now" });
+  const verifyBtn = el("button", { textContent: "Validate", title: "Apply, then read every setting back from the projector" });
+  const checkSlots = [];
+  const checkList = el("ul", { className: "checks" });
+  const saveBtn = el("button", { className: "primary", textContent: "Save" });
+  const delBtn = el("button", { className: "danger", textContent: "Delete", disabled: !editable && !!saved[name] });
+  const copyBtn2 = el("button", { textContent: "Copy to new", type: "button", disabled: !steps.length });
+  copyBtn2.onclick = () => showAdd(true, name);
+  const head = el("div", { className: "row spread" },
+    el("div", { className: "row" }, el("h2", { textContent: name }), dirtyTag),
+    el("div", { className: "row" }, applyBtn, verifyBtn, saveBtn, copyBtn2, delBtn));
+
+  const updateDirty = () => {
+    const dirty = isDirty(name);
+    dirtyTag.textContent = dirty ? (saved[name] ? "unsaved changes" : "not saved yet") : "";
+    saveBtn.disabled = !dirty || !editable || !steps.length;
+    applyBtn.disabled = verifyBtn.disabled = dirty || !saved[name];
+    if (dirty) { checkSlots.forEach(c => c && c.replaceChildren()); checkList.replaceChildren(); }
+    rowWarnings(steps).forEach((w, i) => {
+      const slot = warnSlots[i];
+      if (!slot) return;
+      if (!w) { slot.replaceChildren(); return; }
+      const icon = el("button", { className: "icon warnicon", textContent: "!", type: "button", title: w });
+      icon.setAttribute("aria-label", "Order warning: " + w);
+      icon.onclick = () => say2(msg, "Step " + (i + 1) + ": " + w, "warn");
+      slot.replaceChildren(icon);
+    });
+    refreshPicker();
+  };
+
+  const body = el("tbody");
+  steps.forEach((step, i) => {
+    const [cmd, , suffix] = step;
+    const cmdCell = el("td", { className: "setting", textContent: label(cmd) + (suffix ? " · " + (SUFFIXES[suffix] || suffix) : "") });
+    const valCell = el("td", {}, valueControl(step, v => {
+      steps[i] = suffix ? [cmd, v, suffix] : [cmd, v];
+      updateDirty();
+    }));
+    const rm = el("button", { className: "icon danger", textContent: "×", title: "Remove step" });
+    rm.onclick = () => { steps.splice(i, 1); rerender(); };
+    const grip = el("button", { className: "grip", type: "button", title: "Drag to reorder (or focus and press ↑/↓)" });
+    grip.setAttribute("aria-label", "Reorder step " + (i + 1) + ", " + label(cmd));
+    grip.innerHTML = '<svg viewBox="0 0 10 16" aria-hidden="true"><circle cx="2.5" cy="3" r="1.4"/><circle cx="7.5" cy="3" r="1.4"/>' +
+      '<circle cx="2.5" cy="8" r="1.4"/><circle cx="7.5" cy="8" r="1.4"/><circle cx="2.5" cy="13" r="1.4"/><circle cx="7.5" cy="13" r="1.4"/></svg>';
+    grip.onkeydown = ev => {
+      const to = ev.key === "ArrowUp" ? i - 1 : ev.key === "ArrowDown" ? i + 2 : null;
+      if (to === null || to < 0 || to > steps.length) return;
+      ev.preventDefault();
+      const at = move(i, to);
+      if (at !== null) rerender().querySelectorAll(".grip")[at].focus();
+    };
+    grip.onpointerdown = ev => {
+      if (ev.button !== 0) return;
+      ev.preventDefault();
+      grip.setPointerCapture(ev.pointerId);
+      const tr = grip.closest("tr");
+      const rows = [...body.children];
+      let target = i;
+      // A floating copy of the row follows the pointer; the original stays as a faded placeholder.
+      const box = tr.getBoundingClientRect();
+      const grabY = ev.clientY - box.top;
+      const copy = tr.cloneNode(true);
+      [...copy.children].forEach((td, k) => { td.style.width = tr.children[k].getBoundingClientRect().width + "px"; });
+      const ghost = el("table", { className: "steps drag-ghost" }, el("tbody", {}, copy));
+      Object.assign(ghost.style, { left: box.left + "px", top: box.top + "px", width: box.width + "px" });
+      const line = el("div", { className: "drop-line" });
+      line.hidden = true;
+      document.body.append(ghost, line);
+      tr.classList.add("dragging");
+      const clear = () => { line.hidden = true; };
+      grip.onpointermove = e => {
+        ghost.style.top = e.clientY - grabY + "px";
+        target = rows.length;
+        for (let k = 0; k < rows.length; k++) {
+          const box = rows[k].getBoundingClientRect();
+          if (e.clientY < box.top + box.height / 2) { target = k; break; }
+        }
+        clear();
+        if (target === i || target === i + 1) return;
+        const edge = target < rows.length ? rows[target].getBoundingClientRect().top : rows[rows.length - 1].getBoundingClientRect().bottom;
+        const table = body.getBoundingClientRect();
+        Object.assign(line.style, { left: table.left - 6 + "px", width: table.width + 12 + "px", top: edge - 2 + "px" });
+        line.hidden = false;
+      };
+      grip.onpointerup = grip.onpointercancel = e => {
+        grip.onpointermove = grip.onpointerup = grip.onpointercancel = null;
+        ghost.remove();
+        line.remove();
+        tr.classList.remove("dragging");
+        if (e.type === "pointerup" && move(i, target) !== null) rerender();
+      };
+    };
+    const slot = el("span");
+    warnSlots[i] = slot;
+    const check = el("td", { className: "check" });
+    checkSlots[i] = check;
+    body.append(el("tr", {}, el("td", { className: "handle" }, grip), el("td", { className: "muted", textContent: i + 1 }),
+      cmdCell, valCell, check, el("td", { className: "ctl" }, slot, rm)));
+  });
+
+  const addStep = el("button", { textContent: "Add settings…", disabled: !presetCommands.length });
+  addStep.onclick = () => openSettings(name, rerender);
+
+  const urlInput = el("input", { className: "url", readOnly: true, value: location.origin + "/preset/" + name + "?wait=20",
+    title: "URL for a remote button (send the X-Token header)" });
+  urlInput.onfocus = () => urlInput.select();
+  const copyBtn = copyButton(urlInput);
+
+  saveBtn.onclick = async () => {
+    saveBtn.disabled = true;
+    try {
+      const r = await api("/presets/" + encodeURIComponent(name), {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ steps }),
+      });
+      saved[name] = r.steps;
+      drafts[name] = structuredClone(r.steps);
+      refreshPicker();
+      renderCurrent();
+    } catch (e) { say2(msg, e.message, "bad"); updateDirty(); }
+  };
+  applyBtn.onclick = async () => {
+    applyBtn.disabled = true;
+    say2(msg, "Applying (waits up to 20 s for the projector)…");
+    try {
+      const r = await api("/preset/" + encodeURIComponent(name) + "?wait=20", { method: "POST" });
+      const failed = (r.steps || []).filter(s => !s.ok);
+      if (failed.length) say2(msg, "Some settings were refused: " + failed.map(s => label(s.command) + " (" + s.error + ")").join("; "), "warn");
+      else say2(msg, "Applied.", "ok");
+    } catch (e) { say2(msg, e.message, "bad"); }
+    updateDirty();
+  };
+  verifyBtn.onclick = async () => {
+    verifyBtn.disabled = applyBtn.disabled = true;
+    checkSlots.forEach(c => c.replaceChildren());
+    checkList.replaceChildren();
+    say2(msg, "Validating: setting each value and reading it back (waits up to 20 s for the projector)…");
+    try {
+      const r = await api("/preset/" + encodeURIComponent(name) + "/verify?wait=20", { method: "POST" });
+      const problems = [];
+      r.steps.forEach((s, i) => {
+        const where = "Step " + (i + 1) + " " + label(s.command) + ": ";
+        let text, kind;
+        if (!s.ok) { text = "✗ refused"; kind = "bad"; problems.push(where + "the projector refused " + s.value + " (" + s.error + ")."); }
+        else if (!s.now.confirmed) {
+          text = "✗ not set"; kind = "bad";
+          problems.push(where + "sent " + s.value + ", but right after setting it the projector " +
+            (s.now.error ? "could not report it: " + s.now.error : "reports " + s.now.value) + ".");
+        } else if (s.final.overridden) { text = "✓ (overridden later)"; kind = "muted"; }
+        else if (!s.final.confirmed) {
+          text = "✗ changed later"; kind = "bad";
+          problems.push(where + "was " + s.value + " when set, but after the last step " +
+            (s.final.error ? "the projector can no longer report it (" + s.final.error + "); a later step probably disabled it."
+              : "the projector reports " + s.final.value + "; a later step changed it."));
+        } else { text = "✓ confirmed"; kind = "ok"; }
+        if (checkSlots[i]) checkSlots[i].replaceChildren(el("span", { className: "check " + kind, textContent: text }));
+      });
+      checkList.replaceChildren(...problems.map(p => el("li", { textContent: p })));
+      if (problems.length) say2(msg, problems.length + " setting" + (problems.length > 1 ? "s" : "") + " did not stick:", "bad");
+      else say2(msg, "All " + r.steps.length + " settings confirmed by the projector.", "ok");
+    } catch (e) { say2(msg, e.message, "bad"); }
+    updateDirty();
+  };
+  delBtn.onclick = async () => {
+    const sure = await confirmDialog(
+      saved[name] ? "Delete preset \u201c" + name + "\u201d?" : "Discard \u201c" + name + "\u201d?",
+      saved[name]
+        ? "Remote buttons that call /preset/" + name + " will stop working. This can't be undone from this page."
+        : "This preset was never saved; its settings will be lost.",
+      saved[name] ? "Delete" : "Discard");
+    if (!sure) return;
+    try {
+      if (saved[name]) await api("/presets/" + encodeURIComponent(name), { method: "DELETE" });
+      delete saved[name]; delete drafts[name];
+      select(Object.keys(drafts)[0] || "");
+    } catch (e) { say2(msg, e.message, "bad"); }
+  };
+
+  card.append(head, el("table", { className: "steps" }, body),
+    el("div", { className: "row spread" }, addStep, el("div", { className: "urlbox" }, urlInput, copyBtn)), msg, checkList);
+  updateDirty();
+  return card;
+}
+
+// -- load ---------------------------------------------------------------------------------
+
+async function load() {
+  const session = await (await fetch("/ui/session", { credentials: "same-origin" })).json();
+  showAuth(session.signed_in, session.token_required, session.auto);
+  if (!session.signed_in) { say("presetsMsg", "Sign in with the relay token above."); return; }
+  refreshStatus();
+  api("/get/modelname").then(r => { $("model").textContent = r.value + " · " + location.host; })
+    .catch(() => { $("model").textContent = location.host; });
+  try {
+    const p = await api("/presets");
+    editable = p.editable;
+    saved = p.presets;
+    drafts = structuredClone(saved);
+    if (!editable) say("presetsMsg", "PRESETS_FILE is not set on the relay, so edits cannot be saved.", "warn");
+    else say("presetsMsg", "Reading projector options (first load can take a minute)…");
+    refreshPicker();
+    renderCurrent();
+  } catch (e) { say("presetsMsg", e.message, "bad"); return; }
+  try {
+    const c = await api("/caps");
+    caps = c.commands;
+    presetCommands = c.preset_commands;
+    if (editable) say("presetsMsg", "");
+    renderCurrent();
+  } catch (e) {
+    say("presetsMsg", "Could not read projector options: " + e.message, "bad");
+  }
+}
+
+let pageVersion = null;
+async function checkVersion() {
+  try {
+    const { version } = await (await fetch("/ui/version", { cache: "no-store" })).json();
+    if (pageVersion === null) { pageVersion = version; return; }
+    if (version === pageVersion) return;
+    if (Object.keys(drafts).some(isDirty)) $("updated").hidden = false;  // keep unsaved edits
+    else location.reload();
+  } catch {}
+}
+$("updated").onclick = () => location.reload();
+checkVersion();
+setInterval(checkVersion, 5000);
+
+load();
+let lastPoll = 0;
+setInterval(() => {
+  const signedIn = !$("signOut").hidden || /automatically|No token/.test($("authState").textContent);
+  const every = Date.now() < fastUntil || /startup|cooling/.test(powerState || "") ? 1000 : 5000;
+  if (signedIn && Date.now() - lastPoll >= every) { lastPoll = Date.now(); refreshStatus(); }
+}, 1000);
+</script>
+</body>
+</html>

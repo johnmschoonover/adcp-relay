@@ -1,0 +1,16 @@
+{
+  "game": [
+    ["picture_mode", "game"],
+    ["motionflow", "off"],
+    ["real_cre", "off"],
+    ["nr", "off"],
+    ["mnr", "off"],
+    ["input_lag_red", "on"],
+    ["hdr", "auto"]
+  ],
+  "movie": [
+    ["input_lag_red", "off"],
+    ["picture_mode", "reference"],
+    ["hdr", "auto"]
+  ]
+}
