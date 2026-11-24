@@ -1,6 +1,6 @@
-"""HTTP relay: Sofabaton X2 virtual HTTP device -> Sony projector over ADCP (pyadcp).
+"""HTTP relay: plain HTTP requests -> Sony projector over ADCP (pyadcp).
 
-Every control endpoint accepts GET or POST so the Sofabaton app can use either.
+Every control endpoint accepts GET or POST so any remote or script can use either.
 
     /power/on  /power/off
     /input/<terminal>        e.g. /input/hdmi1
@@ -360,7 +360,7 @@ async def _retry_inactive(request: web.Request, call: Callable[[], Awaitable[obj
     """Run ``call``; with ?wait=N retry for up to N seconds while it answers err_inactive.
 
     Picture settings are inactive in standby and while there is no input signal,
-    so an Activity that powers on and then sets a mode needs to wait for the unit.
+    so a remote macro that powers on and then sets a mode needs to wait for the unit.
     """
     try:
         wait = float(request.query.get("wait", "0"))

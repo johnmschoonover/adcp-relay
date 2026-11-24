@@ -1,14 +1,15 @@
 # adcp-relay
 
-Control a Sony projector from a Sofabaton X2 remote over the network, with named
+Control a Sony projector over the network with plain HTTP requests, with named
 picture presets and a small web page for editing them.
 
-The relay is a single Python process. It takes plain HTTP requests, which is
-what a Sofabaton Wifi device sends, and turns them into Sony ADCP commands
-using [pyadcp](https://github.com/johnmschoonover/sony-adcp).
+The relay is a single Python process. It takes HTTP GET or POST requests, the
+kind a universal-remote hub, home-automation system or `curl` can send, and
+turns them into Sony ADCP commands using
+[pyadcp](https://github.com/johnmschoonover/sony-adcp).
 
 ```
-Sofabaton X2 hub ── HTTP GET + X-Token ──▶ relay.py :8080 ── ADCP (TCP 53595) ──▶ Sony projector
+remote / hub ────── HTTP GET + X-Token ──▶ relay.py :8080 ── ADCP (TCP 53595) ──▶ Sony projector
                                                ▲
 browser ── /ui (preset editor) ────────────────┘
 ```
@@ -17,18 +18,18 @@ browser ── /ui (preset editor) ───────────────
 
 - **Reliable power.** Separate power-on and power-off commands replace an IR
   toggle that can get out of sync.
-- **Picture presets per Activity.** Pressing a PS5 Activity can switch the
-  projector to Game mode with Input lag reduction on and Motionflow off.
-  Pressing a Blu-ray Activity can switch it back to Reference or Cinema Film 1.
+- **Picture presets per source.** Switching to a game console can put the
+  projector in Game mode with Input lag reduction on and Motionflow off.
+  Switching to a Blu-ray player can put it back in Reference or Cinema Film 1.
   A preset is an ordered list of settings, and the relay applies them in order.
-- **Editing presets without touching the remote.** The hub only stores a URL
+- **Editing presets without touching the remote.** The remote only stores a URL
   such as `/preset/game`. What that preset does lives on the relay and can be
   changed from the web page at any time.
 
 It is built for one home theater on a trusted LAN. It is not a multi-user
 service, and it is not hardened for exposure to the internet.
 
-Tested with a **Sony VPL-VW295ES** and a **Sofabaton X2**. Other Sony projectors
+Tested with a **Sony VPL-VW295ES**. Other Sony projectors
 that speak ADCP should work, but expect differences (see [Known gaps](#known-gaps)).
 
 ## Requirements
@@ -36,9 +37,10 @@ that speak ADCP should work, but expect differences (see [Known gaps](#known-gap
 - A Sony projector with ADCP enabled (Network settings on the projector; default port 53595).
 - Python 3.12 or newer on an always-on host on the same network. A small LXC
   container or VM is plenty.
-- A Sofabaton X2 (or another hub whose network devices can send HTTP GET
-  requests with a custom header).
-- The hub must be able to reach the relay's port. They can be on different
+- Something that sends the HTTP requests: a universal-remote hub, a
+  home-automation system, a script. Sending the token as an `X-Token` header
+  needs a client that can set custom headers; otherwise use `?token=`.
+- That client must be able to reach the relay's port. They can be on different
   subnets if those subnets are routed to each other.
 
 ## Setup
@@ -88,7 +90,7 @@ Create `/etc/systemd/system/adcp-relay.service`:
 
 ```ini
 [Unit]
-Description=Sofabaton X2 -> Sony ADCP relay
+Description=HTTP -> Sony ADCP relay
 Wants=network-online.target
 After=network-online.target
 
@@ -153,11 +155,10 @@ curl -s -H "X-Token: $RELAY_TOKEN" localhost:8080/caps | head   # what this mode
 | `UI_AUTO_LOGIN` | `open` | Which browsers are signed in to the web page without the token: `open` (any address, logged as a warning), `off`, or comma-separated networks such as `192.168.1.0/24`. |
 | `LOG_LEVEL` | `INFO` | Python logging level. The access log records paths only, never `?token=`. |
 
-### 3. Add the projector to the Sofabaton
+### 3. Point your remote at the relay
 
-In the Sofabaton app, add a network (Wi-Fi/IP) device that sends HTTP
-requests, and give it one URL command per button. Use method **GET** and add a header named
-`X-Token` set to your `RELAY_TOKEN`:
+Give your remote or hub one URL command per button. Use method **GET** and add
+a header named `X-Token` set to your `RELAY_TOKEN`:
 
 | Command | URL |
 |---|---|
@@ -169,40 +170,11 @@ requests, and give it one URL command per button. Use method **GET** and add a h
 The web page's **Links** button lists these URLs for every saved preset, with
 copy buttons.
 
-Then:
-
-- Set the device's power-on and power-off to the Power On and Power Off commands.
-- In each Activity, add the preset command after the projector's power-on step.
-  `?wait=20` makes the relay retry for up to 20 seconds while the projector is
-  still warming up, but a delay of a few seconds after power-on in the Activity
-  helps too.
-
-A Wifi device holds at most 10 commands, so presets are the way to get many
-settings behind one button.
-
-#### Optional: provision the hub from a script
-
-`provision_projector.py` creates the Wifi device and its URL commands
-directly on the hub. `backup_hub.py` takes a full, verified, read-only backup of
-the hub first. Both use [sofabaton-x](https://github.com/m3tac0de/home-assistant-sofabaton-x1s),
-an unofficial library built by reverse-engineering the hub's protocol.
-
-```sh
-python3 -m venv /opt/sofabaton-tools
-/opt/sofabaton-tools/bin/pip install "sofabaton-x>=0.2.6,<0.3"
-
-/opt/sofabaton-tools/bin/python backup_hub.py --hub-ip <hub-ip>
-/opt/sofabaton-tools/bin/python provision_projector.py --hub-ip <hub-ip> \
-    --relay http://<relay>:8080 --token "$RELAY_TOKEN" --name "Sony Projector"            # dry run
-/opt/sofabaton-tools/bin/python provision_projector.py ... --apply                         # write
-/opt/sofabaton-tools/bin/python provision_projector.py ... --device-id <id> --apply        # add missing commands to an existing device
-```
-
-- **Close the Sofabaton app on every phone first.** The hub accepts only one
-  controller at a time.
-- **Run them on a host the hub can connect back to.** The hub opens a TCP
-  connection to the client on port 8200.
-- **Back up before every write.** The hub has no undo.
+Send the preset command after the projector's power-on. `?wait=20` makes the
+relay retry for up to 20 seconds while the projector is still warming up, but a
+delay of a few seconds after power-on helps too. Remotes that limit how many
+commands a network device can hold are the reason presets exist: many settings
+behind one button.
 
 ## Using the web page
 
@@ -355,15 +327,12 @@ preset cannot cut the relay off from the projector.
   HTTP. Some browsers may refuse it; the URL is left selected so you can press
   ⌘C or Ctrl+C.
 
-**Sofabaton**
+**Remotes**
 
-- **No error feedback on the remote.** The hub does not show whether an HTTP
-  command failed. Check the relay's journal (`journalctl -u adcp-relay`).
-- **The hub must reach the relay.** On a separate IoT network, allow the hub to
+- **Most remotes show no error feedback.** A failed HTTP command is silent on
+  the remote. Check the relay's journal (`journalctl -u adcp-relay`).
+- **The remote must reach the relay.** On a separate IoT network, allow it to
   connect to the relay's port.
-- **The provisioning scripts use an unofficial, reverse-engineered library.**
-  A hub firmware update could break them. Setting the device up by hand in the
-  Sofabaton app always works.
 
 **Project**
 
@@ -379,10 +348,8 @@ preset cannot cut the relay off from the projector.
 | `relay.py` | The relay: HTTP routes, presets, web-page sign-in. |
 | `ui.html` | The web page, served at `/ui`. |
 | `presets.json` | Example presets (`game`, `movie`). |
-| `provision_projector.py` | Optional: create the Sofabaton Wifi device from a script. |
-| `backup_hub.py` | Optional: full read-only backup of a Sofabaton hub. |
 
 ## Not affiliated
 
-Not affiliated with or endorsed by Sony or Sofabaton. Product names are
+Not affiliated with or endorsed by Sony. Product names are
 trademarks of their owners.
