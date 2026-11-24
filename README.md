@@ -290,24 +290,28 @@ starts up or has no signal.
 ```json
 {
   "game": [
-    ["picture_mode", "game"],
-    ["motionflow", "off"],
-    ["real_cre", "off"],
-    ["input_lag_red", "on"]
+    {"command": "picture_mode", "value": "game"},
+    {"command": "motionflow", "value": "off"},
+    {"command": "real_cre", "value": "off"},
+    {"command": "col_corr_hue", "value": "5", "suffix": "r"},
+    {"command": "input_lag_red", "value": "on"}
   ],
   "movie": [
-    ["input_lag_red", "off"],
-    ["picture_mode", "reference"]
+    {"command": "input_lag_red", "value": "off"},
+    {"command": "picture_mode", "value": "reference"}
   ]
 }
 ```
 
-Each step is `[command, value]` or `[command, value, suffix]`, using pyadcp's
-command names; `/caps` lists the options your model accepts. The relay checks
-the file at startup and refuses to start on a typo. Presets saved through the
-web page or API may only use picture and signal settings. Network, lock and
-setup commands are excluded so a preset cannot cut the relay off from the
-projector.
+Each preset is an ordered list of steps, applied top to bottom. A step has a
+`command` and a `value`, using pyadcp's command names, plus a `suffix` for
+commands that have variants (per-colour or per-input settings). `/caps` lists
+the options and suffixes your model accepts.
+
+The relay checks the file at startup and refuses to start on a typo, including
+an unknown key in a step. Presets saved through the web page or API may only use
+picture and signal settings. Network, lock and setup commands are excluded so a
+preset cannot cut the relay off from the projector.
 
 ## Known gaps
 

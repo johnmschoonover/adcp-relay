@@ -1,16 +1,16 @@
 {
   "game": [
-    ["picture_mode", "game"],
-    ["motionflow", "off"],
-    ["real_cre", "off"],
-    ["nr", "off"],
-    ["mnr", "off"],
-    ["input_lag_red", "on"],
-    ["hdr", "auto"]
+    {"command": "picture_mode", "value": "game"},
+    {"command": "motionflow", "value": "off"},
+    {"command": "real_cre", "value": "off"},
+    {"command": "nr", "value": "off"},
+    {"command": "mnr", "value": "off"},
+    {"command": "input_lag_red", "value": "on"},
+    {"command": "hdr", "value": "auto"}
   ],
   "movie": [
-    ["input_lag_red", "off"],
-    ["picture_mode", "reference"],
-    ["hdr", "auto"]
+    {"command": "input_lag_red", "value": "off"},
+    {"command": "picture_mode", "value": "reference"},
+    {"command": "hdr", "value": "auto"}
   ]
 }

@@ -71,7 +71,10 @@ TOKEN: web.AppKey[str | None] = web.AppKey("token", str)
 type Networks = tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]
 AUTO_LOGIN: web.AppKey[Networks] = web.AppKey("auto_login", tuple)
 OPEN_NETWORKS: Networks = (ipaddress.ip_network("0.0.0.0/0"), ipaddress.ip_network("::/0"))
-PRESETS: web.AppKey[dict[str, list[list[str]]]] = web.AppKey("presets", dict)
+# A step is {"command": ..., "value": ...} plus "suffix" for commands that take one.
+type Step = dict[str, str]
+type Presets = dict[str, list[Step]]
+PRESETS: web.AppKey[Presets] = web.AppKey("presets", dict)
 PRESETS_PATH: web.AppKey[str | None] = web.AppKey("presets_path", str)
 PRESETS_LOCK: web.AppKey[asyncio.Lock] = web.AppKey("presets_lock", asyncio.Lock)
 CAPS: web.AppKey[dict[str, dict[str, object]]] = web.AppKey("caps", dict)
@@ -96,26 +99,27 @@ PRESET_COMMANDS = frozenset({
     "3d_format", "3d_depth", "sim3d_effect", "hdmi_signal_format", "dynamic_range",
 })
 
-# Each preset is an ordered list of [command, value] or [command, value, suffix].
-# Order matters: input lag reduction greys out Motionflow and Reality Creation on
-# Sony units, so those are set first. Override with PRESETS_FILE (same JSON shape).
-# Option names are this unit's; confirm them against /caps.
-DEFAULT_PRESETS: dict[str, list[list[str]]] = {
+# Each preset is an ordered list of steps, applied in order. Order matters: input lag
+# reduction greys out Motionflow and Reality Creation on Sony units, so those are set
+# first. Override with PRESETS_FILE (same JSON shape). Option names are this unit's;
+# confirm them against /caps.
+DEFAULT_PRESETS: Presets = {
     "game": [
-        ["picture_mode", "game"],
-        ["motionflow", "off"],
-        ["real_cre", "off"],
-        ["nr", "off"],
-        ["mnr", "off"],
-        ["input_lag_red", "on"],
-        ["hdr", "auto"],
+        {"command": "picture_mode", "value": "game"},
+        {"command": "motionflow", "value": "off"},
+        {"command": "real_cre", "value": "off"},
+        {"command": "nr", "value": "off"},
+        {"command": "mnr", "value": "off"},
+        {"command": "input_lag_red", "value": "on"},
+        {"command": "hdr", "value": "auto"},
     ],
     "movie": [
-        ["input_lag_red", "off"],
-        ["picture_mode", "reference"],
-        ["hdr", "auto"],
+        {"command": "input_lag_red", "value": "off"},
+        {"command": "picture_mode", "value": "reference"},
+        {"command": "hdr", "value": "auto"},
     ],
 }
+STEP_KEYS = frozenset({"command", "value", "suffix"})
 
 # Only simple identifiers may reach the projector; never forward raw text.
 _IDENT = re.compile(r"^[a-z0-9_]{1,32}$")
@@ -424,7 +428,7 @@ async def _run_preset(request: web.Request, verify: bool) -> web.Response:
     deadline = _wait_deadline(request)
     results: list[dict[str, object]] = []
     for step in steps:
-        command, value, suffix = step[0], step[1], (step[2] if len(step) > 2 else None)
+        command, value, suffix = step["command"], step["value"], step.get("suffix")
         try:
             sent = await _apply_setting(projector, deadline, command, value, suffix)
             entry: dict[str, object] = {"command": command, "value": sent, "suffix": suffix, "ok": True}
@@ -477,10 +481,9 @@ async def list_presets(request: web.Request) -> web.Response:
     })
 
 
-def _check_step(step: list[str], caps: dict[str, dict[str, object]]) -> None:
+def _check_step(step: Step, caps: dict[str, dict[str, object]]) -> None:
     """Reject a step the API may not save; checked against /caps once it has been read."""
-    name, value = step[0], step[1].lower()
-    suffix = step[2] if len(step) > 2 else None
+    name, value, suffix = step["command"], step["value"].lower(), step.get("suffix")
     if name not in PRESET_COMMANDS:
         raise web.HTTPBadRequest(text=f"{name} is not a picture or signal setting")
     command = get_command(name)
@@ -503,7 +506,7 @@ def _check_step(step: list[str], caps: dict[str, dict[str, object]]) -> None:
         raise web.HTTPBadRequest(text=f"{name} is {command.kind.value}, not settable")
 
 
-def _write_presets(path: str, presets: dict[str, list[list[str]]]) -> None:
+def _write_presets(path: str, presets: Presets) -> None:
     """Replace the file atomically, keeping the previous version as <path>.bak."""
     target = Path(path)
     tmp = target.with_name(target.name + ".tmp")
@@ -517,7 +520,7 @@ def _write_presets(path: str, presets: dict[str, list[list[str]]]) -> None:
     os.replace(tmp, target)
 
 
-async def _store_presets(app: web.Application, presets: dict[str, list[list[str]]]) -> None:
+async def _store_presets(app: web.Application, presets: Presets) -> None:
     path = app[PRESETS_PATH]
     if path is None:
         raise web.HTTPConflict(text="PRESETS_FILE is not set; edits would not survive a restart")
@@ -628,18 +631,28 @@ async def _close(app: web.Application) -> None:
     await app[PROJECTOR].close()
 
 
-def _check_presets(presets: object) -> dict[str, list[list[str]]]:
+def _check_presets(presets: object) -> Presets:
     """Fail at startup, not at press time, on a malformed preset file."""
     if not isinstance(presets, dict):
         raise ValueError("presets must be a JSON object of name -> steps")
+    checked: Presets = {}
     for name, steps in presets.items():
         if not _IDENT.match(str(name)) or not isinstance(steps, list) or not steps:
             raise ValueError(f"preset {name!r}: needs a simple name and a non-empty step list")
+        checked[str(name)] = []
         for step in steps:
-            if not (isinstance(step, list) and 2 <= len(step) <= 3):
-                raise ValueError(f"preset {name!r}: step {step!r}: want [cmd, value(, suffix)]")
-            get_command(str(step[0]))  # UnknownCommandError for a typo
-    return {str(k): [[str(x) for x in st] for st in v] for k, v in presets.items()}
+            if (
+                not isinstance(step, dict)
+                or not {"command", "value"} <= step.keys() <= STEP_KEYS
+                or not all(isinstance(v, (str, int)) and not isinstance(v, bool) for v in step.values())
+            ):
+                raise ValueError(
+                    f"preset {name!r}: step {step!r}: want {{\"command\": ..., \"value\": ...}}"
+                    f" with an optional \"suffix\" and nothing else"
+                )
+            get_command(str(step["command"]))  # UnknownCommandError for a typo
+            checked[str(name)].append({k: str(step[k]) for k in ("command", "value", "suffix") if k in step})
+    return checked
 
 
 def build_app(
@@ -648,7 +661,7 @@ def build_app(
     mac: str | None = None,
     token: str | None = None,
     port: int = 53595,
-    presets: dict[str, list[list[str]]] | None = None,
+    presets: Presets | None = None,
     presets_path: str | None = None,
     auto_login: Networks = (),
 ) -> web.Application:
@@ -701,11 +714,11 @@ def build_app(
     return app
 
 
-def _load_presets(path: str | None) -> dict[str, list[list[str]]] | None:
+def _load_presets(path: str | None) -> Presets | None:
     if not path:
         return None
     with open(path, encoding="utf-8") as fh:
-        loaded: dict[str, list[list[str]]] = json.load(fh)
+        loaded: Presets = json.load(fh)
     return loaded
 
 

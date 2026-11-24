@@ -457,6 +457,9 @@ function confirmDialog(title, text, yesLabel) {
 
 // -- settings picker -------------------------------------------------------------------
 
+// The relay stores steps as {command, value, suffix?}; the editor works on [command, value, suffix?].
+const fromApi = steps => steps.map(s => (s.suffix ? [s.command, s.value, s.suffix] : [s.command, s.value]));
+const toApi = steps => steps.map(([command, value, suffix]) => (suffix ? { command, value, suffix } : { command, value }));
 const stepKey = (cmd, sfx) => (sfx ? cmd + ":" + sfx : cmd);
 
 // Where a new step goes so the ordering rules hold: Input first, Picture mode right
@@ -823,10 +826,10 @@ function renderPreset(name) {
     try {
       const r = await api("/presets/" + encodeURIComponent(name), {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ steps }),
+        body: JSON.stringify({ steps: toApi(steps) }),
       });
-      saved[name] = r.steps;
-      drafts[name] = structuredClone(r.steps);
+      saved[name] = fromApi(r.steps);
+      drafts[name] = structuredClone(saved[name]);
       refreshPicker();
       renderCurrent();
     } catch (e) { say2(msg, e.message, "bad"); updateDirty(); }
@@ -906,7 +909,7 @@ async function load() {
   try {
     const p = await api("/presets");
     editable = p.editable;
-    saved = p.presets;
+    saved = Object.fromEntries(Object.entries(p.presets).map(([n, steps]) => [n, fromApi(steps)]));
     drafts = structuredClone(saved);
     if (!editable) say("presetsMsg", "PRESETS_FILE is not set on the relay, so edits cannot be saved.", "warn");
     else say("presetsMsg", "Reading projector options (first load can take a minute)…");
